@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 import io
 import os
@@ -14,12 +14,196 @@ from flask import (
     session,
     url_for,
 )
+app = Flask(__name__)
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from werkzeug.security import check_password_hash, generate_password_hash
 
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('role') != 'admin':
+            flash('غير مصرح لك بالوصول إلى هذه الصفحة', 'danger')
+            return redirect(url_for('staff_dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route("/admin/staff/create", methods=["POST"])
+@admin_required
+def create_staff():
+    full_name = request.form.get("full_name", "").strip()
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+    role = request.form.get("role", "staff").strip()
+
+    if not all([full_name, username, password]) or role not in ("admin", "staff"):
+        flash("يرجى ملء جميع الحقول بشكل صحيح", "danger")
+        return redirect(url_for("staff_dashboard"))
+
+    password_hash = generate_password_hash(password, method="scrypt")
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO staff (full_name, username, password_hash, role, is_active)
+            VALUES (?, ?, ?, ?, 1)
+            """,
+            (full_name, username, password_hash, role)
+        )
+        conn.commit()
+        flash(f"تم إنشاء حساب {full_name} بنجاح", "success")
+    except sqlite3.IntegrityError:
+        flash("اسم المستخدم موجود مسبقاً، اختر اسماً آخر", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for("staff_dashboard"))
+
+
+@app.route("/admin/staff/update/<int:staff_id>", methods=["POST"])
+@admin_required
+def update_staff_credentials(staff_id):
+    new_username = request.form.get("username", "").strip()
+    new_password = request.form.get("password", "").strip()
+    new_full_name = request.form.get("full_name", "").strip()
+
+    if not new_username:
+        flash("اسم المستخدم لا يمكن أن يكون فارغاً", "danger")
+        return redirect(url_for("staff_dashboard"))
+
+    conn = get_db()
+    try:
+        if new_password:
+            password_hash = generate_password_hash(new_password, method="scrypt")
+            if new_full_name:
+                conn.execute("""
+                    UPDATE staff
+                    SET full_name = ?, username = ?, password_hash = ?
+                    WHERE id = ?
+                """, (new_full_name, new_username, password_hash, staff_id))
+            else:
+                conn.execute("""
+                    UPDATE staff
+                    SET username = ?, password_hash = ?
+                    WHERE id = ?
+                """, (new_username, password_hash, staff_id))
+        else:
+            if new_full_name:
+                conn.execute("""
+                    UPDATE staff
+                    SET full_name = ?, username = ?
+                    WHERE id = ?
+                """, (new_full_name, new_username, staff_id))
+            else:
+                conn.execute("""
+                    UPDATE staff
+                    SET username = ?
+                    WHERE id = ?
+                """, (new_username, staff_id))
+        conn.commit()
+
+        if session.get("staff_id") == staff_id:
+            session["username"] = new_username
+
+        flash("تم تحديث بيانات الحساب بنجاح", "success")
+    except sqlite3.IntegrityError:
+        flash("اسم المستخدم مستخدم لحساب آخر", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for("staff_dashboard"))
+
+    new_username = request.form.get("username", "").strip()
+    new_password = request.form.get("password", "").strip()
+    new_full_name = request.form.get("full_name", "").strip()
+
+    if not new_username:
+        flash("اسم المستخدم لا يمكن أن يكون فارغاً", "danger")
+        return redirect(url_for("staff_dashboard"))
+
+    conn = get_db()
+    try:
+        if new_password:
+            password_hash = generate_password_hash(new_password, method="scrypt")
+            if new_full_name:
+                conn.execute("""
+                    UPDATE staff
+                    SET full_name = ?, username = ?, password_hash = ?
+                    WHERE id = ?
+                """, (new_full_name, new_username, password_hash, staff_id))
+            else:
+                conn.execute("""
+                    UPDATE staff
+                    SET username = ?, password_hash = ?
+                    WHERE id = ?
+                """, (new_username, password_hash, staff_id))
+        else:
+            if new_full_name:
+                conn.execute("""
+                    UPDATE staff
+                    SET full_name = ?, username = ?
+                    WHERE id = ?
+                """, (new_full_name, new_username, staff_id))
+            else:
+                conn.execute("""
+                    UPDATE staff
+                    SET username = ?
+                    WHERE id = ?
+                """, (new_username, staff_id))
+        conn.commit()
+
+        if session.get("staff_id") == staff_id:
+            session["username"] = new_username
+
+        flash("تم تحديث بيانات الحساب بنجاح", "success")
+    except sqlite3.IntegrityError:
+        flash("اسم المستخدم مستخدم لحساب آخر", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for("staff_dashboard"))
+    full_name = request.form.get("full_name", "").strip()
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+    role = request.form.get("role", "staff").strip()
+
+    if not all([full_name, username, password]) or role not in ("admin", "staff"):
+        flash("يرجى ملء جميع الحقول بشكل صحيح", "danger")
+        return redirect(url_for("staff_dashboard"))
+
+    password_hash = generate_password_hash(password, method="scrypt")
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO staff (full_name, username, password_hash, role, is_active)
+            VALUES (?, ?, ?, ?, 1)
+            """,
+            (full_name, username, password_hash, role)
+        )
+        conn.commit()
+        flash(f"تم إنشاء حساب {full_name} بنجاح", "success")
+    except sqlite3.IntegrityError:
+        flash("اسم المستخدم موجود مسبقاً، اختر اسماً آخر", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for("staff_dashboard"))
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('role') != 'admin':
+            flash('غير مصرح لك بالوصول إلى هذه الصفحة', 'danger')
+            return redirect(url_for('staff_dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dorm-secret-key-2026")
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=210)
+
 DB_PATH = "dorm_system.db"
 
 MOVEMENT_TYPES = ["نزول للأسواق", "للأهل", "للمدينة"]
@@ -32,6 +216,22 @@ def get_db():
   conn.execute("PRAGMA foreign_keys = ON")
   return conn
 
+@app.route('/scan_rfid', methods=['POST'])
+def scan_rfid():
+    card_uid = request.form.get('card_uid')
+    conn = get_db()
+    cur = conn.cursor()
+    student = cur.execute('SELECT id FROM students WHERE card_uid = ?', (card_uid,)).fetchone()
+    
+    if student:
+        student_id = student['id']
+        last_move = cur.execute('SELECT movement_type FROM movements WHERE student_id = ? ORDER BY id DESC LIMIT 1', (student_id,)).fetchone()
+        new_type = 'خروج' if last_move and last_move['movement_type'] == 'دخول' else 'دخول'
+        
+        cur.execute('INSERT INTO movements (student_id, movement_type) VALUES (?, ?)', (student_id, new_type))
+        conn.commit()
+        return {'status': 'success', 'message': f'تم تسجيل {new_type}'}
+    return {'status': 'error', 'message': 'الطالب غير موجود'}, 404
 
 def init_db():
   conn = get_db()
@@ -203,6 +403,7 @@ def student_login():
     session["student_name"] = student["full_name"]
     session["card_uid"] = student["card_uid"]
     flash(f"أهلاً بك {student['full_name']}", "success")
+    session.permanent = True
     return redirect(url_for("student_portal"))
 
   return render_template("student_login.html")
@@ -409,38 +610,37 @@ def edit_movement(movement_id):
 @app.route("/staff/students/add", methods=["POST"])
 @staff_required()
 def add_student():
-  full_name = request.form.get("full_name", "").strip()
-  card_uid = request.form.get("card_uid", "").strip().upper()
-  phone = request.form.get("phone", "").strip()
-  department = request.form.get("department", "").strip()
-  status = request.form.get("status", "نشط").strip()
+    full_name = request.form.get("full_name", "").strip()
+    card_uid = request.form.get("card_uid", "").strip().upper()
+    phone = request.form.get("phone", "").strip()
+    department = request.form.get("department", "").strip()
+    status = request.form.get("status", "").strip()
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
 
-  if (
-      not all([full_name, card_uid, phone, department])
-      or status not in STUDENT_STATUSES
-  ):
-    flash("يرجى ملء جميع حقول الطالب بشكل صحيح.", "danger")
+    if (
+        not all([full_name, card_uid, phone, department, username, password])
+        or status not in STUDENT_STATUSES
+    ):
+        flash("يرجى ملء جميع حقول الطالب بشكل صحيح", "danger")
+        return redirect(url_for("staff_dashboard"))
+
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO students (full_name, card_uid, phone, department, status, username, password)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+            (full_name, card_uid, phone, department, status, username, password),
+        )
+        conn.commit()
+    except Exception as e:
+        flash("خطأ في إضافة الطالب", "danger")
+    finally:
+        conn.close()
+
     return redirect(url_for("staff_dashboard"))
-
-  conn = get_db()
-  try:
-    conn.execute(
-        """
-            INSERT INTO students (full_name, card_uid, phone, department, status)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-        (full_name, card_uid, phone, department, status),
-    )
-    conn.commit()
-    flash(f"تمت إضافة الطالب ({full_name}) بنجاح.", "success")
-  except sqlite3.IntegrityError:
-    flash("المعرف الفريد للبطاقة مستخدم مسبقاً لطالب آخر.", "danger")
-  finally:
-    conn.close()
-
-  return redirect(url_for("staff_dashboard"))
-
-
 # --- إضافة موظف وإدارة الصلاحيات (للمدير فقط) ---
 @app.route("/staff/users/add", methods=["POST"])
 @staff_required(role="admin")
